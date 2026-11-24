@@ -490,6 +490,17 @@ pub enum Commands {
         #[arg(long)]
         no_sign: bool,
     },
+
+    /// Extract native libraries (.so) from an APK/JAR to a directory.
+    /// Maps arch dirs: arm64-v8a→arm64, armeabi-v7a→arm, x86_64→x64, x86→x86.
+    #[command(name = "extract-libs")]
+    ExtractLibs {
+        /// Input APK or JAR file.
+        input: String,
+
+        /// Output directory for extracted libraries.
+        output_dir: String,
+    },
 }
 
 pub fn print_version() {
