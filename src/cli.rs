@@ -119,6 +119,32 @@ pub enum Commands {
         /// APK file to open at start.
         apk: Option<String>,
     },
+
+    /// Patch multiple methods at once (multi-smali editing).
+    #[command(name = "multi-patch")]
+    MultiPatch {
+        /// Input APK.
+        input: String,
+
+        /// Output APK.
+        output: String,
+
+        /// Patch specification: Class#method=smali_file (repeatable).
+        #[arg(long)]
+        patch: Vec<String>,
+
+        /// Inline patch: Class#method=smali_body (repeatable).
+        #[arg(long)]
+        patch_body: Vec<String>,
+
+        /// Restore signatures from this directory.
+        #[arg(long)]
+        sig_dir: Option<String>,
+
+        /// Do not sign (output will be unsigned).
+        #[arg(long)]
+        no_sign: bool,
+    },
 }
 
 pub fn print_version() {

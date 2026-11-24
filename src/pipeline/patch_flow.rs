@@ -31,34 +31,61 @@ pub fn run(
     new_method_body: &str,
     sig_dir: Option<&str>,
 ) -> Result<PatchResult> {
+    multi_patch(
+        input_apk,
+        output_apk,
+        &[(class_name.to_string(), method_name.to_string(), new_method_body.to_string())],
+        sig_dir,
+    )
+}
+
+/// Run multiple patches on the same APK in a single pass.
+///
+/// Each patch is (class_name, method_name, new_method_body). All patches are
+/// applied to the same APK instance, so only one DEX parse + rebuild cycle
+/// happens regardless of how many methods are patched.
+pub fn multi_patch(
+    input_apk: &str,
+    output_apk: &str,
+    patches: &[(String, String, String)],
+    sig_dir: Option<&str>,
+) -> Result<PatchResult> {
+    if patches.is_empty() {
+        return Err(crate::error::Error::Other("no patches specified".into()));
+    }
+
     // Step 1: Open the APK for reading and editing
     let file = File::open(input_apk)
         .map_err(|e| crate::error::Error::Io(e))?;
     let mut apk = apkscope_core::apk::Apk::new(file)
         .map_err(|e| crate::error::Error::Other(format!("Failed to open APK: {e}")))?;
 
-    // Step 2: Export the target class to smali
-    let mut smali_text = apkscope_core::smali::export_class_from(&mut apk, class_name)
-        .map_err(|e| crate::error::Error::Other(format!("Smali export error for {class_name}: {e}")))?;
+    // Step 2: Export each class to smali, patch the method, inject back
 
-    // Step 3: Patch the method body in the smali
-    smali_text = smali_patcher::replace_method_body(&smali_text, method_name, new_method_body)?;
+    for (class_name, method_name, new_body) in patches {
+        let mut smali_text = apkscope_core::smali::export_class_from(&mut apk, class_name)
+            .map_err(|e| crate::error::Error::Other(format!("Smali export error for {class_name}: {e}")))?;
 
-    // Step 4: Inject the modified smali back into the APK's own classes/edits
-    {
-        let classes = apk.classes().map_err(|e| {
-            crate::error::Error::Other(format!("Failed to access APK classes: {e}"))
-        })?;
-        classes.set_text(&smali_text).map_err(|e| {
-            crate::error::Error::Other(format!("Failed to set smali text: {e}"))
-        })?;
+        // Patch the method body in the smali
+        smali_text = smali_patcher::replace_method_body(&smali_text, method_name, new_body)?;
+
+        // Inject the modified smali back into the APK's own classes/edits
+        {
+            let classes = apk.classes().map_err(|e| {
+                crate::error::Error::Other(format!("Failed to access APK classes: {e}"))
+            })?;
+            classes.set_text(&smali_text).map_err(|e| {
+                crate::error::Error::Other(format!("Failed to set smali text: {e}"))
+            })?;
+        }
     }
-    // Write the edits (modified DEX) into the APK's entries map
+
+    // Write all edits (modified DEXs) into the APK's entries map
     let _edits = apk.edits().map_err(|e| {
         crate::error::Error::Other(format!("Failed to write APK edits: {e}"))
     })?;
 
-    // Step 5: Rebuild the APK to a temporary file (unsigned)
+    // Step 4: Rebuild the APK to a temporary file (unsigned)
     let temp_output = format!("{output_apk}.tmp");
     {
         let mut out_file = File::create(&temp_output).map_err(|e| crate::error::Error::Io(e))?;
@@ -68,7 +95,7 @@ pub fn run(
         out_file.flush().map_err(|e| crate::error::Error::Io(e))?;
     }
 
-    // Step 6: Handle signatures
+    // Step 5: Handle signatures
     let signatures_restored = if let Some(dir) = sig_dir {
         // Restore original META-INF signatures from the backup directory
         crate::core::signature_handler::restore_signatures(&temp_output, dir, output_apk)?;
@@ -81,10 +108,11 @@ pub fn run(
         false
     };
 
+    let last = &patches[patches.len() - 1];
     Ok(PatchResult {
         output_path: output_apk.to_string(),
-        class_patched: class_name.to_string(),
-        method_patched: method_name.to_string(),
+        class_patched: last.0.clone(),
+        method_patched: last.1.clone(),
         signatures_restored,
     })
 }

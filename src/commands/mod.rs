@@ -1,6 +1,7 @@
 //! Command dispatch for ApkModder.
 
 mod gui;
+mod multi_patch;
 mod open;
 mod view;
 mod patch;
@@ -36,6 +37,21 @@ pub fn run(cmd: Commands, _global_opts: &GlobalOpts) -> Result<()> {
             &method,
             smali_file.as_deref(),
             smali_body.as_deref(),
+            sig_dir.as_deref(),
+            no_sign,
+        ),
+        Commands::MultiPatch {
+            input,
+            output,
+            patch,
+            patch_body,
+            sig_dir,
+            no_sign,
+        } => multi_patch::run(
+            &input,
+            &output,
+            &patch,
+            &patch_body,
             sig_dir.as_deref(),
             no_sign,
         ),
