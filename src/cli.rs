@@ -157,6 +157,17 @@ pub enum Commands {
         method: String,
     },
 
+    /// Discover which classes contain a given text string in an APK/JAR.
+    /// Searches raw DEX bytes without full smali parse — fast for large JARs.
+    #[command(name = "discover-text")]
+    DiscoverText {
+        /// Input APK or JAR file.
+        input: String,
+
+        /// Text to search for (e.g. 0x1fa265a).
+        text: String,
+    },
+
     /// Replace text inside a method body (scoped sed replacement).
     #[command(name = "replace-text")]
     ReplaceText {

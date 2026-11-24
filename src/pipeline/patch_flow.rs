@@ -499,6 +499,9 @@ pub fn replace_text_class(
 /// Parallelism: class export + smali modification run across threads (each thread opens
 /// its own file handle). Injection back into the APK is sequential because `Classes`
 /// holds shared mutable DEX-edit state.
+/// Replace text in all methods of all classes (global scoped sed).
+/// Optimized: only exports/re-injects classes whose DEX bytes contain the target text,
+/// avoiding full-class smali parse for large JARs like framework.jar.
 pub fn replace_text_global(
     input_apk: &str,
     output_apk: &str,
@@ -540,7 +543,8 @@ pub fn replace_text_global(
         return Err(crate::error::Error::Other("no classes found in APK".into()));
     }
 
-    // Phase 2: Parallel export + modify. Each thread opens its own handle to the file.
+    // Phase 2: Parallel export + modify ONLY classes containing the target text.
+    // Each thread opens its own file handle. Skips classes that don't contain `old`.
     let num_threads = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(1)
@@ -565,6 +569,22 @@ pub fn replace_text_global(
                         .map_err(|e| crate::error::Error::Other(format!("Failed to open APK: {e}")))?;
                     let mut out = Vec::with_capacity(chunk.len());
                     for class_name in &chunk {
+                        // Quick check: does this class's DEX bytes contain the target text?
+                        // Skip export entirely if not - avoids smali parse for most classes.
+                        let dex_entries = apk.dex().map_err(|e| {
+                            crate::error::Error::Other(format!("Failed to read DEX: {e}"))
+                        })?;
+                        let mut contains_text = false;
+                        for (_dex_name, dex_bytes) in &dex_entries {
+                            if !contains_slice(dex_bytes, old.as_bytes()) {
+                                contains_text = true;
+                                break;
+                            }
+                        }
+                        if !contains_text {
+                            continue;
+                        }
+
                         let mut smali_text = apkscope_core::smali::export_class_from(&mut apk, class_name)
                             .map_err(|e| crate::error::Error::Other(format!("Smali export error for {class_name}: {e}")))?;
                         smali_text = replace_text_in_all_methods(&smali_text, &old, &new)
@@ -588,6 +608,19 @@ pub fn replace_text_global(
         }
         results
     };
+
+    if modified.is_empty() {
+        // No classes contained the target text — nothing to patch.
+        if input_apk != output_apk {
+            std::fs::copy(input_apk, output_apk).map_err(|e| crate::error::Error::Io(e))?;
+        }
+        return Ok(PatchResult {
+            output_path: output_apk.to_string(),
+            class_patched: String::new(),
+            method_patched: String::new(),
+            signatures_restored: false,
+        });
+    }
 
     // Phase 3: Sequential inject (single open, shared `Classes` state).
     let file = File::open(input_apk)
@@ -632,21 +665,6 @@ pub fn replace_text_global(
         signatures_restored,
     })
 }
-
-/// Raw byte find/replace across all DEX entries (fast, no smali parsing).
-/// Replaces `old` bytes with `new` bytes in every DEX entry of the APK/JAR.
-/// `old` and `new` must have the same length.
-///
-/// Accepts:
-///   - `0x`-prefixed hex constants (e.g. "0x1fa265a" → little-endian bytes 5a 26 1f 01)
-///   - raw hex strings (e.g. "5a261f01", used as-is)
-///   - UTF-8 text (e.g. "ro.product.is_prc")
-///
-/// When an input starts with `0x`/`0X`, the prefix is stripped, odd-length
-/// hex is padded with a leading zero, and the resulting bytes are reversed
-/// for little-endian DEX byte order (since smali constants are conceptually
-/// big-endian values that DEX stores little-endian).
-/// Otherwise inputs are used as raw bytes or UTF-8 text directly.
 pub fn replace_bytes_global(
     input_apk: &str,
     output_apk: &str,
@@ -843,6 +861,13 @@ pub fn add_smali(
 }
 
 /// Replace `old` with `new` in all method bodies of a smali class text.
+fn contains_slice(haystack: &[u8], needle: &[u8]) -> bool {
+    if needle.is_empty() {
+        return true;
+    }
+    haystack.windows(needle.len()).any(|w| w == needle)
+}
+
 fn replace_text_in_all_methods(smali: &str, old: &str, new: &str) -> Result<String> {
     let lines: Vec<&str> = smali.lines().collect();
     let mut result = String::new();

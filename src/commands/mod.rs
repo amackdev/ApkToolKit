@@ -15,6 +15,7 @@ mod replace_bytes_global;
 mod replace_text;
 mod replace_text_class;
 mod replace_text_global;
+mod discover_text;
 mod extract_libs;
 mod extract_sig;
 mod sig_info;
@@ -344,6 +345,9 @@ pub fn run(cmd: Commands, _global_opts: &GlobalOpts) -> Result<()> {
         Commands::Gui { apk } => gui::run(apk),
         Commands::DiscoverMethod { input, method } => {
             discover_method::run(&input, &method)
+        }
+        Commands::DiscoverText { input, text } => {
+            discover_text::run(&input, &text)
         }
         Commands::ExtractLibs { input, output_dir } => {
             extract_libs::run(&input, &output_dir)
