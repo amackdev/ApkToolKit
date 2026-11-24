@@ -79,9 +79,13 @@ pub enum Commands {
         /// Method name (e.g. onCreate).
         method: String,
 
-        /// Path to the new smali method body file.
+        /// Path to the new smali method body file. Use "-" to read from stdin.
         #[arg(long)]
-        smali_file: String,
+        smali_file: Option<String>,
+
+        /// Inline smali method body (alternative to --smali-file).
+        #[arg(long)]
+        smali_body: Option<String>,
 
         /// Restore signatures from this directory instead of signing.
         #[arg(long)]
@@ -128,7 +132,7 @@ pub fn print_usage() {
     println!("Commands:");
     println!("  open       Inspect an APK");
     println!("  view       View a class or method as smali/Java");
-    println!("  patch      Patch a method and rebuild");
+    println!("  patch      Patch a method and rebuild (--smali-file or --smali-body)");
     println!("  extract-sig Extract META-INF signatures");
     println!("  sig-info   Show signature info");
     println!("  gui        Launch the GUI viewer");

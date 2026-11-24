@@ -26,9 +26,19 @@ pub fn run(cmd: Commands, _global_opts: &GlobalOpts) -> Result<()> {
             class,
             method,
             smali_file,
+            smali_body,
             sig_dir,
             no_sign,
-        } => patch::run(&input, &output, &class, &method, &smali_file, sig_dir.as_deref(), no_sign),
+        } => patch::run(
+            &input,
+            &output,
+            &class,
+            &method,
+            smali_file.as_deref(),
+            smali_body.as_deref(),
+            sig_dir.as_deref(),
+            no_sign,
+        ),
         Commands::ExtractSig { apk, output_dir } => {
             extract_sig::run(&apk, &output_dir)
         }
