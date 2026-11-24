@@ -1,5 +1,6 @@
 //! Command dispatch for ApkModder.
 
+mod gui;
 mod open;
 mod view;
 mod patch;
@@ -32,5 +33,6 @@ pub fn run(cmd: Commands, _global_opts: &GlobalOpts) -> Result<()> {
             extract_sig::run(&apk, &output_dir)
         }
         Commands::SigInfo { apk } => sig_info::run(&apk),
+        Commands::Gui { apk } => gui::run(apk),
     }
 }

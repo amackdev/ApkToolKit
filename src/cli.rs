@@ -108,6 +108,13 @@ pub enum Commands {
         /// APK file.
         apk: String,
     },
+
+    /// Launch the GUI viewer.
+    #[command(name = "gui")]
+    Gui {
+        /// APK file to open at start.
+        apk: Option<String>,
+    },
 }
 
 pub fn print_version() {
@@ -124,6 +131,7 @@ pub fn print_usage() {
     println!("  patch      Patch a method and rebuild");
     println!("  extract-sig Extract META-INF signatures");
     println!("  sig-info   Show signature info");
+    println!("  gui        Launch the GUI viewer");
 }
 
 
