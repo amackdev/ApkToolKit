@@ -1,0 +1,11 @@
+/target
+**/*.rs.bak
+*.tmp
+*.apk.tmp
+*.sav
+.idea/
+.vscode/
+*.swp
+*.swo
+~*
+/apkmodder
