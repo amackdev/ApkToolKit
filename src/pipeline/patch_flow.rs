@@ -637,9 +637,16 @@ pub fn replace_text_global(
 /// Replaces `old` bytes with `new` bytes in every DEX entry of the APK/JAR.
 /// `old` and `new` must have the same length.
 ///
-/// Accepts either raw hex strings (e.g. "52a61f01") or UTF-8 text (e.g. "0x1fa2652").
-/// When both inputs are valid even-length hex, they are decoded as bytes;
-/// otherwise they are used as UTF-8 text bytes directly.
+/// Accepts:
+///   - `0x`-prefixed hex constants (e.g. "0x1fa265a" → little-endian bytes 5a 26 1f 01)
+///   - raw hex strings (e.g. "5a261f01", used as-is)
+///   - UTF-8 text (e.g. "ro.product.is_prc")
+///
+/// When an input starts with `0x`/`0X`, the prefix is stripped, odd-length
+/// hex is padded with a leading zero, and the resulting bytes are reversed
+/// for little-endian DEX byte order (since smali constants are conceptually
+/// big-endian values that DEX stores little-endian).
+/// Otherwise inputs are used as raw bytes or UTF-8 text directly.
 pub fn replace_bytes_global(
     input_apk: &str,
     output_apk: &str,
@@ -647,18 +654,51 @@ pub fn replace_bytes_global(
     new_hex: &str,
     sig_dir: Option<&str>,
 ) -> Result<PatchResult> {
-    fn try_decode_hex(s: &str) -> Option<Vec<u8>> {
-        if s.len() % 2 != 0 || s.is_empty() {
+    /// Decode a `0x`-prefixed hex constant into little-endian DEX bytes.
+    /// Returns None if the input is not a valid `0x` hex constant.
+    fn decode_0x_hex(s: &str) -> Option<Vec<u8>> {
+        let s = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X"))?;
+        if s.is_empty() {
             return None;
         }
-        (0..s.len())
+        // Pad odd-length hex with a leading zero.
+        let padded = if s.len() % 2 != 0 {
+            format!("0{}", s)
+        } else {
+            s.to_string()
+        };
+        let bytes: Vec<u8> = (0..padded.len())
             .step_by(2)
-            .map(|i| u8::from_str_radix(&s[i..i + 2], 16).ok())
-            .collect()
+            .map(|i| u8::from_str_radix(&padded[i..i + 2], 16).ok())
+            .collect::<Option<Vec<u8>>>()?;
+        // Reverse for little-endian DEX byte order.
+        let mut le = bytes;
+        le.reverse();
+        Some(le)
     }
 
-    let old = try_decode_hex(old_hex).unwrap_or_else(|| old_hex.as_bytes().to_vec());
-    let new = try_decode_hex(new_hex).unwrap_or_else(|| new_hex.as_bytes().to_vec());
+    /// Try to decode input as bytes. Priority:
+    /// 1. `0x`-prefixed hex → little-endian bytes
+    /// 2. Raw even-length hex → raw bytes
+    /// 3. Otherwise → UTF-8 text bytes
+    fn try_decode_bytes(s: &str) -> Vec<u8> {
+        if s.starts_with("0x") || s.starts_with("0X") {
+            return decode_0x_hex(s).unwrap_or_else(|| s.as_bytes().to_vec());
+        }
+        if s.len() % 2 == 0 && !s.is_empty() {
+            if let Some(bytes) = (0..s.len())
+                .step_by(2)
+                .map(|i| u8::from_str_radix(&s[i..i + 2], 16).ok())
+                .collect::<Option<Vec<u8>>>()
+            {
+                return bytes;
+            }
+        }
+        s.as_bytes().to_vec()
+    }
+
+    let old = try_decode_bytes(old_hex);
+    let new = try_decode_bytes(new_hex);
     if old.len() != new.len() {
         return Err(crate::error::Error::Other(
             "old and new must have the same length (in bytes)".into(),

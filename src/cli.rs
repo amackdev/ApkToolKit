@@ -327,7 +327,8 @@ pub enum Commands {
     },
 
     /// Raw byte find/replace across all DEX entries (fast, no smali parsing).
-    /// Old and new hex strings must have the same length.
+    /// Accepts `0x`-prefixed hex constants (e.g. "0x1fa265a"), raw hex, or UTF-8 text.
+    /// Old and new must decode to the same byte length.
     #[command(name = "replace-bytes-global")]
     ReplaceBytesGlobal {
         /// Input APK or JAR file.
@@ -336,10 +337,10 @@ pub enum Commands {
         /// Output APK or JAR file.
         output: String,
 
-        /// Old byte sequence as hex (e.g. "081fa2697").
+        /// Old byte sequence (0x-hex, raw hex, or UTF-8 text, e.g. "0x1fa265a").
         old_hex: String,
 
-        /// New byte sequence as hex (same length as old_hex).
+        /// New byte sequence (same byte length as old_hex).
         new_hex: String,
 
         /// Do not sign (output will be unsigned).
