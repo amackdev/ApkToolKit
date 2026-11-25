@@ -512,6 +512,22 @@ pub enum Commands {
         /// Output directory for extracted libraries.
         output_dir: String,
     },
+
+    /// Extract all resources matching a pattern into a directory.
+    /// Example: `extract-resource-all SystemUI.apk bools ./out/`
+    /// extracts res/values/bools.xml, res/values-night/bools.xml, etc.
+    #[command(name = "extract-resource-all")]
+    ExtractResourceAll {
+        /// Input APK or JAR file.
+        input: String,
+
+        /// Pattern to match in resource paths (e.g. "bools" matches
+        /// res/values/bools.xml, res/values-night/bools.xml, etc.).
+        pattern: String,
+
+        /// Output directory for extracted resources.
+        output_dir: String,
+    },
 }
 
 pub fn print_version() {
@@ -543,6 +559,7 @@ pub fn print_usage() {
     println!("  extract-smali-class  Extract one class as smali from APK/JAR");
     println!("  inject-smali-class  Inject one modified smali class back into APK/JAR");
     println!("  extract-resource     Extract a resource file (e.g. res/values/bools.xml)");
+    println!("  extract-resource-all  Extract all resources matching a pattern to a directory");
     println!("  put-resource         Put/replace a resource file (e.g. res/values/bools.xml)");
     println!("  discover-method  Find which class contains a method");
     println!("  extract-sig    Extract META-INF signatures");

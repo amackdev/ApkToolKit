@@ -79,3 +79,26 @@ pub fn has_signing_files<P: AsRef<Path>>(apk_path: P) -> Result<bool> {
             || upper.contains("SIG_BLOCK")
     }))
 }
+
+/// List all zip entries in an APK whose path contains `pattern`.
+/// Returns full entry paths (e.g. "res/values/bools.xml").
+pub fn list_entries_matching<P: AsRef<Path>>(
+    apk_path: P,
+    pattern: &str,
+) -> Result<Vec<String>> {
+    let file = File::open(apk_path.as_ref()).map_err(|e| crate::error::Error::Io(e))?;
+    let mut zip = zip::ZipArchive::new(file).map_err(|e| crate::error::Error::Zip(e))?;
+
+    let mut matches = Vec::new();
+    for i in 0..zip.len() {
+        let entry = zip.by_index(i).map_err(|e| crate::error::Error::Zip(e))?;
+        let name = entry.name().to_owned();
+        if name.contains(pattern) {
+            matches.push(name);
+        }
+    }
+
+    matches.sort();
+    matches.dedup();
+    Ok(matches)
+}
