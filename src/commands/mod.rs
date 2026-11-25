@@ -19,6 +19,7 @@ mod discover_text;
 mod extract_libs;
 mod extract_resource_all;
 mod extract_sig;
+mod put_resource_all;
 mod sig_info;
 mod view;
 
@@ -358,5 +359,11 @@ pub fn run(cmd: Commands, _global_opts: &GlobalOpts) -> Result<()> {
             pattern,
             output_dir,
         } => extract_resource_all::run(&input, &pattern, &output_dir),
+        Commands::PutResourceAll {
+            input,
+            output,
+            input_dir,
+            no_sign,
+        } => put_resource_all::run(&input, &output, &input_dir, no_sign),
     }
 }

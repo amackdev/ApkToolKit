@@ -502,6 +502,24 @@ pub enum Commands {
         no_sign: bool,
     },
 
+    /// Put all resources from a directory back into an APK/JAR.
+    /// Does a single rebuild for all resources (efficient for bulk operations).
+    #[command(name = "put-resource-all")]
+    PutResourceAll {
+        /// Input APK or JAR file.
+        input: String,
+
+        /// Output APK or JAR file.
+        output: String,
+
+        /// Directory containing resources to put back.
+        input_dir: String,
+
+        /// Do not sign (output will be unsigned).
+        #[arg(long)]
+        no_sign: bool,
+    },
+
     /// Extract native libraries (.so) from an APK/JAR to a directory.
     /// Maps arch dirs: arm64-v8a→arm64, armeabi-v7a→arm, x86_64→x64, x86→x86.
     #[command(name = "extract-libs")]
@@ -561,6 +579,7 @@ pub fn print_usage() {
     println!("  extract-resource     Extract a resource file (e.g. res/values/bools.xml)");
     println!("  extract-resource-all  Extract all resources matching a pattern to a directory");
     println!("  put-resource         Put/replace a resource file (e.g. res/values/bools.xml)");
+    println!("  put-resource-all     Put all resources from a directory back into APK/JAR");
     println!("  discover-method  Find which class contains a method");
     println!("  extract-sig    Extract META-INF signatures");
     println!("  sig-info       Show signature info");
