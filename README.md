@@ -1,7 +1,7 @@
 # ApkToolKit
 
 Professional APK modding toolkit: extract, patch, rebuild, and sign APKs without full extraction.
-Built in Rust on top of [apkscope-core](apkscope/core), providing native Windows/Linux binaries
+Built in Rust on top of [apkscope-core](https://github.com/suffixing/apkscope), providing native Windows/Linux binaries
 with optional GUI (egui) and CLI.
 
 ## Features
