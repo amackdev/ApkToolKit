@@ -5,7 +5,7 @@ edition = "2021"
 description = "APK modding toolkit: extract, patch, rebuild, sign — no extraction required"
 authors = ["ApkToolKit Contributors"]
 license = "Apache-2.0"
-repository = "https://github.com/example/ApkToolKit"
+repository = "https://github.com/amackdev/ApkToolKit"
 
 [dependencies]
 # Reuse apkscope-core from the sibling crate
