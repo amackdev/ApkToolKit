@@ -229,16 +229,48 @@ Test APKs can be placed in the parent directory. `SystemUI.apk` is present at
 
 ```
 ApkToolKit/
+├── Cargo.toml            # Package manifest (name = "ApkToolKit")
+├── Cargo.lock
+├── build.sh              # Linux build script
+├── build.bat             # Windows build script
+├── .gitignore
 ├── src/
-│   ├── main.rs           # Entry point
-│   ├── cli.rs            # Clap CLI definition
-│   ├── commands/         # Command handlers (open, view, patch, extract-sig, sig-info)
-│   ├── core/             # Core modding logic (apk_reader, smali_patcher, signature_handler, meta_inf_handler)
+│   ├── main.rs           # Binary entry point (CLI dispatch)
+│   ├── cli.rs            # Clap CLI definition + print_version / print_usage
+│   ├── error.rs          # Error types
+│   ├── commands/         # Command handlers
+│   │   ├── mod.rs
+│   │   ├── open.rs           # ApkToolKit open — inspect an APK
+│   │   ├── view.rs           # ApkToolKit view — view class/method as smali/Java
+│   │   ├── patch.rs          # ApkToolKit patch — patch a method and rebuild
+│   │   ├── multi_patch.rs    # ApkToolKit multi-patch — patch multiple methods
+│   │   ├── append_method.rs  # ApkToolKit append-method — append a new method
+│   │   ├── add_smali.rs      # ApkToolKit add-smali — add a smali class as DEX entry
+│   │   ├── extract_smali_class.rs   # extract one class as smali
+│   │   ├── inject_smali_class.rs    # inject one modified smali class
+│   │   ├── extract_resource_all.rs  # extract all resources matching a pattern
+│   │   ├── put_resource_all.rs      # put all resources back into APK/JAR
+│   │   ├── extract_entry.rs / put_entry.rs  # single entry extract/put
+│   │   ├── extract_libs.rs          # extract native libraries (.so)
+│   │   ├── extract_sig.rs / sig_info.rs  # META-INF signature extract/info
+│   │   ├── replace_text.rs / replace_text_class.rs / replace_text_global.rs
+│   │   ├── replace_bytes_global.rs  # raw byte find/replace across DEX entries
+│   │   ├── discover_method.rs / discover_text.rs
+│   │   ├── insert_before.rs / insert_after.rs / remove_lines.rs
+│   │   └── gui.rs            # ApkToolKit gui — launch the GUI viewer
+│   ├── core/             # Core modding logic
+│   │   ├── mod.rs
+│   │   ├── apk_reader.rs       # APK/JAR reading (DEX, classes, entries)
+│   │   ├── smali_patcher.rs    # smali method patching logic
+│   │   ├── signature_handler.rs # signing / signature restore
+│   │   └── meta_inf_handler.rs  # META-INF block handling
 │   ├── pipeline/         # Patch pipeline orchestration
+│   │   ├── mod.rs
+│   │   └── patch_flow.rs
 │   ├── gui/              # egui GUI (feature-gated)
-│   └── error.rs          # Error types
-├── apkscope-core/        # Sibling crate: DEX, smali, resources, rebuild, signing
-└── Cargo.toml
+│   │   ├── mod.rs
+│   │   └── app.rs
+└── apkscope-core/        # Sibling crate: DEX, smali, resources, rebuild, signing
 ```
 
 ## License
