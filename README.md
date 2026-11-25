@@ -1,4 +1,4 @@
-# ApkModder
+# ApkToolKit
 
 Professional APK modding toolkit: extract, patch, rebuild, and sign APKs without full extraction.
 Built in Rust on top of [apkscope-core](apkscope/core), providing native Windows/Linux binaries
@@ -16,9 +16,9 @@ with optional GUI (egui) and CLI.
 ## Install
 
 ```bash
-cd apkmodder
+cd ApkToolKit
 cargo build --release
-# Binary: target/release/apkmodder
+# Binary: target/release/ApkToolKit
 ```
 
 With GUI:
@@ -32,7 +32,7 @@ cargo build --release --features gui
 ### Inspect an APK
 
 ```bash
-apkmodder open SystemUI.apk
+ApkToolKit open SystemUI.apk
 ```
 
 Shows package name, class count, and META-INF signature info.
@@ -41,22 +41,22 @@ Shows package name, class count, and META-INF signature info.
 
 ```bash
 # View whole class
-apkmodder view SystemUI.apk com.android.systemui.StatusBar --smali
+ApkToolKit view SystemUI.apk com.android.systemui.StatusBar --smali
 
 # View one method
-apkmodder view SystemUI.apk com.android.systemui.StatusBar --method onCreate --smali
+ApkToolKit view SystemUI.apk com.android.systemui.StatusBar --method onCreate --smali
 ```
 
 ### Patch a method (no signing)
 
 ```bash
 # 1. Dump the method to edit
-apkmodder view SystemUI.apk com.android.systemui.StatusBar --method onCreate --smali > onCreate.smali
+ApkToolKit view SystemUI.apk com.android.systemui.StatusBar --method onCreate --smali > onCreate.smali
 
 # 2. Edit onCreate.smali in your editor
 
 # 3. Patch + rebuild (unsigned, META-INF stripped)
-apkmodder patch SystemUI.apk SystemUI_modded.apk \
+ApkToolKit patch SystemUI.apk SystemUI_modded.apk \
     com.android.systemui.StatusBar \
     onCreate \
     --smali-file onCreate.smali \
@@ -67,14 +67,14 @@ apkmodder patch SystemUI.apk SystemUI_modded.apk \
 
 ```bash
 # 1. Extract original signatures
-apkmodder extract-sig SystemUI.apk ./sig-backup/
+ApkToolKit extract-sig SystemUI.apk ./sig-backup/
 
 # 2. Dump and edit the method
-apkmodder view SystemUI.apk com.android.systemui.StatusBar --method onCreate --smali > onCreate.smali
+ApkToolKit view SystemUI.apk com.android.systemui.StatusBar --method onCreate --smali > onCreate.smali
 # (edit onCreate.smali)
 
 # 3. Patch and restore original META-INF
-apkmodder patch SystemUI.apk SystemUI_modded.apk \
+ApkToolKit patch SystemUI.apk SystemUI_modded.apk \
     com.android.systemui.StatusBar \
     onCreate \
     --smali-file onCreate.smali \
@@ -86,7 +86,7 @@ This produces `SystemUI_modded.apk` with your patched method and the original si
 ### Sign with your own key
 
 ```bash
-apkmodder patch SystemUI.apk SystemUI_signed.apk \
+ApkToolKit patch SystemUI.apk SystemUI_signed.apk \
     com.android.systemui.StatusBar \
     onCreate \
     --smali-file onCreate.smali \
@@ -96,7 +96,7 @@ apkmodder patch SystemUI.apk SystemUI_signed.apk \
 ## GUI
 
 ```bash
-apkmodder gui SystemUI.apk
+ApkToolKit gui SystemUI.apk
 ```
 
 (Requires `--features gui` build.)
@@ -109,7 +109,7 @@ Test APKs can be placed in the parent directory. `SystemUI.apk` is present at
 ## Architecture
 
 ```
-apkmodder/
+ApkToolKit/
 ├── src/
 │   ├── main.rs           # Entry point
 │   ├── cli.rs            # Clap CLI definition
