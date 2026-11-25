@@ -1,4 +1,4 @@
-//! `apkmodder view` — view a class or method as smali/Java.
+//! `ApkToolKit view` — view a class or method as smali/Java.
 
 use crate::core::smali_patcher;
 use crate::error::Result;

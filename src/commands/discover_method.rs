@@ -1,4 +1,4 @@
-//! `apkmodder discover-method` — find which class contains a method.
+//! `ApkToolKit discover-method` — find which class contains a method.
 
 use crate::pipeline::patch_flow;
 use crate::error::Result;

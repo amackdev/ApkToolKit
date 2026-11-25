@@ -1,12 +1,12 @@
 @echo off
-:: Build ApkModder for Windows
+:: Build ApkToolKit for Windows
 
-echo === Building ApkModder (CLI only) ===
+echo === Building ApkToolKit (CLI only) ===
 cargo build --release
 
 echo.
 echo === Build complete ===
-echo Binary: target\release\apkmodder.exe
+echo Binary: target\release\ApkToolKit.exe
 echo.
 echo To build with GUI:
 echo   cargo build --release --features gui

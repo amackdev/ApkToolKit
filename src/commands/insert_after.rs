@@ -1,4 +1,4 @@
-//! `apkmodder insert-after` — insert text after an anchor line in a method.
+//! `ApkToolKit insert-after` — insert text after an anchor line in a method.
 
 use crate::pipeline::patch_flow;
 use crate::error::Result;

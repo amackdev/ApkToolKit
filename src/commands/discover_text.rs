@@ -1,4 +1,4 @@
-//! `apkmodder discover-text` — find which classes contain a given text string.
+//! `ApkToolKit discover-text` — find which classes contain a given text string.
 //! Searches raw DEX bytes without full smali parse — fast for large JARs.
 
 use crate::error::Result;

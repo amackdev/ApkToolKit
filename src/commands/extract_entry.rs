@@ -1,4 +1,4 @@
-//! `apkmodder extract-entry` — extract a single entry from an APK/JAR.
+//! `ApkToolKit extract-entry` — extract a single entry from an APK/JAR.
 
 use crate::error::Result;
 

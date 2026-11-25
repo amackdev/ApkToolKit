@@ -1,4 +1,4 @@
-//! `apkmodder remove-lines` — remove lines matching a pattern in a method.
+//! `ApkToolKit remove-lines` — remove lines matching a pattern in a method.
 
 use crate::pipeline::patch_flow;
 use crate::error::Result;

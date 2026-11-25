@@ -1,4 +1,4 @@
-//! `apkmodder open` — inspect an APK.
+//! `ApkToolKit open` — inspect an APK.
 
 use crate::core::apk_reader;
 use crate::core::meta_inf_handler;

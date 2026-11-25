@@ -1,4 +1,4 @@
-//! `apkmodder replace-text-global` — global scoped sed replacement in all methods.
+//! `ApkToolKit replace-text-global` — global scoped sed replacement in all methods.
 
 use crate::pipeline::patch_flow;
 use crate::error::Result;

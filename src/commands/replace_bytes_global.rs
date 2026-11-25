@@ -1,4 +1,4 @@
-//! `apkmodder replace-bytes-global` — fast raw byte find/replace across all DEX entries.
+//! `ApkToolKit replace-bytes-global` — fast raw byte find/replace across all DEX entries.
 
 use crate::pipeline::patch_flow;
 use crate::error::Result;

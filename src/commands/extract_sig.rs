@@ -1,4 +1,4 @@
-//! `apkmodder extract-sig` — extract META-INF signatures.
+//! `ApkToolKit extract-sig` — extract META-INF signatures.
 
 use crate::core::signature_handler;
 use crate::error::Result;

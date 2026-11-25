@@ -1,4 +1,4 @@
-//! `apkmodder patch` — patch a method and rebuild.
+//! `ApkToolKit patch` — patch a method and rebuild.
 
 use crate::pipeline::patch_flow;
 use crate::error::Result;

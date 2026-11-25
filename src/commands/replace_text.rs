@@ -1,4 +1,4 @@
-//! `apkmodder replace-text` — scoped sed replacement inside a method body.
+//! `ApkToolKit replace-text` — scoped sed replacement inside a method body.
 
 use crate::pipeline::patch_flow;
 use crate::error::Result;

@@ -1,4 +1,4 @@
-//! `apkmodder insert-before` — insert text before an anchor line in a method.
+//! `ApkToolKit insert-before` — insert text before an anchor line in a method.
 
 use crate::pipeline::patch_flow;
 use crate::error::Result;

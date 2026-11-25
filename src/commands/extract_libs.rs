@@ -1,4 +1,4 @@
-//! `apkmodder extract-libs` — extract native libraries (.so) from an APK/JAR.
+//! `ApkToolKit extract-libs` — extract native libraries (.so) from an APK/JAR.
 //! Maps arch directories: arm64-v8a→arm64, armeabi-v7a→arm, x86_64→x64, x86→x86.
 
 use crate::error::Result;

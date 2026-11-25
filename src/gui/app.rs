@@ -150,7 +150,7 @@ impl ApkModderApp {
             let _ = tx.send(GuiMessage::PatchStarted);
 
             // Write the edited smali to a temp file for the pipeline.
-            let smali_file = std::env::temp_dir().join("apkmodder_patch.smali");
+            let smali_file = std::env::temp_dir().join("ApkToolKit_patch.smali");
             if let Err(e) = std::fs::write(&smali_file, &smali_text) {
                 let _ = tx.send(GuiMessage::PatchFinished(Err(format!(
                     "Failed to write smali temp file: {e}"

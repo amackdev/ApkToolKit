@@ -1,4 +1,4 @@
-//! `apkmodder gui` — launch the GUI viewer.
+//! `ApkToolKit gui` — launch the GUI viewer.
 
 use crate::error::Result;
 

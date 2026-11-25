@@ -1,10 +1,10 @@
-//! `apkmodder extract-resource-all` — extract all resources matching a pattern
+//! `ApkToolKit extract-resource-all` — extract all resources matching a pattern
 //! from an APK/JAR into a directory.
 //!
 //! Uses apkscope-core's resource decoding, so binary XML under `res/`
 //! and values from `resources.arsc` are decoded to human-readable text XML.
 //!
-//! Example: `apkmodder extract-resource-all SystemUI.apk bools ./out/`
+//! Example: `ApkToolKit extract-resource-all SystemUI.apk bools ./out/`
 //! extracts `res/values/bools.xml`, `res/values-night/bools.xml`, etc.
 //! as decoded text XML (not raw binary XML bytes).
 

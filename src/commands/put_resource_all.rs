@@ -1,8 +1,8 @@
-//! `apkmodder put-resource-all` — put all resources from a directory back into an APK/JAR.
+//! `ApkToolKit put-resource-all` — put all resources from a directory back into an APK/JAR.
 //!
 //! Does a single APK rebuild for all resources (efficient for bulk operations).
 //!
-//! Example: `apkmodder put-resource-all SystemUI.apk ./extracted/`
+//! Example: `ApkToolKit put-resource-all SystemUI.apk ./extracted/`
 //! puts all files under ./extracted/ back into SystemUI.apk preserving paths.
 
 use crate::error::Result;

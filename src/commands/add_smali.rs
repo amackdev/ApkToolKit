@@ -1,4 +1,4 @@
-//! `apkmodder add-smali` — add a smali class as a new DEX entry.
+//! `ApkToolKit add-smali` — add a smali class as a new DEX entry.
 
 use crate::pipeline::patch_flow;
 use crate::error::Result;

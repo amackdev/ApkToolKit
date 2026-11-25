@@ -1,4 +1,4 @@
-//! `apkmodder multi-patch` — patch multiple methods in one pass.
+//! `ApkToolKit multi-patch` — patch multiple methods in one pass.
 
 use crate::pipeline::patch_flow;
 use crate::error::Result;

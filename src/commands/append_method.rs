@@ -1,4 +1,4 @@
-//! `apkmodder append-method` — append a new method to a class.
+//! `ApkToolKit append-method` — append a new method to a class.
 
 use crate::pipeline::patch_flow;
 use crate::error::Result;

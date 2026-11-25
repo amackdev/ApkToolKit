@@ -1,4 +1,4 @@
-//! `apkmodder put-entry` — put/replace a single entry in an APK/JAR.
+//! `ApkToolKit put-entry` — put/replace a single entry in an APK/JAR.
 
 use crate::error::Result;
 use std::io::Write;

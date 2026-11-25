@@ -1,4 +1,4 @@
-//! `apkmodder sig-info` — show META-INF signature info.
+//! `ApkToolKit sig-info` — show META-INF signature info.
 
 use crate::core::meta_inf_handler;
 use crate::error::Result;

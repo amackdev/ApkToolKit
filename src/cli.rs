@@ -12,9 +12,9 @@ pub struct GlobalOpts {
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "apkmodder",
+    name = "ApkToolKit",
     about = "APK modding toolkit: extract, patch, rebuild, sign — no extraction required",
-    long_about = "ApkModder modifies APKs in place. Patch individual smali methods without extracting the whole APK."
+    long_about = "ApkToolKit modifies APKs in place. Patch individual smali methods without extracting the whole APK."
 )]
 pub struct Cli {
     #[command(subcommand)]
@@ -549,12 +549,12 @@ pub enum Commands {
 }
 
 pub fn print_version() {
-    println!("apkmodder 0.1.0");
+    println!("ApkToolKit 0.1.0");
 }
 
 pub fn print_usage() {
-    println!("apkmodder 0.1.0 - APK modding toolkit");
-    println!("Usage: apkmodder <command> [options]");
+    println!("ApkToolKit 0.1.0 - APK modding toolkit");
+    println!("Usage: ApkToolKit <command> [options]");
     println!();
     println!("Commands:");
     println!("  open           Inspect an APK");
