@@ -510,14 +510,14 @@ pub fn replace_text_global(
     sig_dir: Option<&str>,
 ) -> Result<PatchResult> {
     // Phase 1: Collect all class names (single open, DEX parsed once).
+    let file = File::open(input_apk)
+        .map_err(|e| crate::error::Error::Io(e))?;
+    let mut apk = apkscope_core::apk::Apk::new(file)
+        .map_err(|e| crate::error::Error::Other(format!("Failed to open APK: {e}")))?;
+    let dex_entries = apk.dex().map_err(|e| {
+        crate::error::Error::Other(format!("Failed to read DEX: {e}"))
+    })?;
     let class_names: Vec<String> = {
-        let file = File::open(input_apk)
-            .map_err(|e| crate::error::Error::Io(e))?;
-        let mut apk = apkscope_core::apk::Apk::new(file)
-            .map_err(|e| crate::error::Error::Other(format!("Failed to open APK: {e}")))?;
-        let dex_entries = apk.dex().map_err(|e| {
-            crate::error::Error::Other(format!("Failed to read DEX: {e}"))
-        })?;
         let mut names = Vec::new();
         for (_dex_name, dex_bytes) in &dex_entries {
             let dex = apkscope_core::dex::Dex::parse(dex_bytes)
@@ -543,8 +543,34 @@ pub fn replace_text_global(
         return Err(crate::error::Error::Other("no classes found in APK".into()));
     }
 
-    // Phase 2: Parallel export + modify ONLY classes containing the target text.
-    // Each thread opens its own file handle. Skips classes that don't contain `old`.
+    // Phase 2: Quick DEX byte pre-filter. If `old` doesn't appear as UTF-8 bytes
+    // anywhere in the DEX, it can't be in any class's smali — exit immediately.
+    // This makes "text not found" cases instant (no smali export needed).
+    let text_exists_in_dex = dex_entries.iter().any(|(_dex_name, dex_bytes)| {
+        contains_slice(dex_bytes, old.as_bytes())
+    });
+
+    if !text_exists_in_dex {
+        eprintln!(
+            "replace-text-global: text '{}' not found in any class — nothing patched",
+            old
+        );
+        if input_apk != output_apk {
+            std::fs::copy(input_apk, output_apk).map_err(|e| crate::error::Error::Io(e))?;
+        }
+        return Ok(PatchResult {
+            output_path: output_apk.to_string(),
+            class_patched: String::new(),
+            method_patched: String::new(),
+            signatures_restored: false,
+        });
+    }
+
+    // Phase 3: Export ALL classes to smali in parallel, then grep-style search
+    // the smali TEXT (not raw DEX bytes) for the target string. Only classes
+    // whose smali actually contains `old` get replaced and re-injected.
+    // DEX byte scan above may have false positives (binary garbage matches),
+    // so smali grep is the authoritative check.
     let num_threads = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(1)
@@ -554,6 +580,12 @@ pub fn replace_text_global(
         .chunks(chunk_size)
         .map(|c| c.to_vec())
         .collect();
+
+    eprintln!(
+        "replace-text-global: exporting {} class(es) across {} thread(s)",
+        class_names.len(),
+        num_threads
+    );
 
     let modified: Vec<(String, String)> = {
         let handles: Vec<_> = chunks
@@ -568,28 +600,32 @@ pub fn replace_text_global(
                     let mut apk = apkscope_core::apk::Apk::new(file)
                         .map_err(|e| crate::error::Error::Other(format!("Failed to open APK: {e}")))?;
                     let mut out = Vec::with_capacity(chunk.len());
+                    let mut skip_count = 0usize;
                     for class_name in &chunk {
-                        // Quick check: does this class's DEX bytes contain the target text?
-                        // Skip export entirely if not - avoids smali parse for most classes.
-                        let dex_entries = apk.dex().map_err(|e| {
-                            crate::error::Error::Other(format!("Failed to read DEX: {e}"))
-                        })?;
-                        let mut contains_text = false;
-                        for (_dex_name, dex_bytes) in &dex_entries {
-                            if !contains_slice(dex_bytes, old.as_bytes()) {
-                                contains_text = true;
-                                break;
+                        let smali_text = match apkscope_core::smali::export_class_from(&mut apk, class_name) {
+                            Ok(s) => s,
+                            Err(e) => {
+                                skip_count += 1;
+                                continue;
                             }
-                        }
-                        if !contains_text {
+                        };
+
+                        // Grep-style: does this class's smali text contain `old`?
+                        if !smali_text.contains(&old) {
                             continue;
                         }
 
-                        let mut smali_text = apkscope_core::smali::export_class_from(&mut apk, class_name)
-                            .map_err(|e| crate::error::Error::Other(format!("Smali export error for {class_name}: {e}")))?;
-                        smali_text = replace_text_in_all_methods(&smali_text, &old, &new)
-                            .map_err(|e| crate::error::Error::Other(format!("Replace-text-global error for {class_name}: {e}")))?;
-                        out.push((class_name.clone(), smali_text));
+                        let replaced = match replace_text_in_all_methods(&smali_text, &old, &new) {
+                            Ok(s) => s,
+                            Err(e) => {
+                                skip_count += 1;
+                                continue;
+                            }
+                        };
+                        out.push((class_name.clone(), replaced));
+                    }
+                    if skip_count > 0 {
+                        eprintln!("replace-text-global: warning — skipped {skip_count} class(es) in this chunk (export errors)");
                     }
                     Ok(out)
                 })
@@ -597,20 +633,30 @@ pub fn replace_text_global(
             .collect();
 
         let mut results = Vec::new();
+        let mut hit_count = 0usize;
         for h in handles {
             let join_result = h.join().map_err(|_| {
                 crate::error::Error::Other("thread panic during parallel export".into())
             })?;
             let chunk_results = join_result?;
+            hit_count += chunk_results.len();
             for (class_name, smali) in chunk_results {
                 results.push((class_name, smali));
             }
         }
+        eprintln!(
+            "replace-text-global: {} class(es) contain target text — modifying",
+            hit_count
+        );
         results
     };
 
     if modified.is_empty() {
         // No classes contained the target text — nothing to patch.
+        eprintln!(
+            "replace-text-global: text '{}' not found in any class — nothing patched",
+            old
+        );
         if input_apk != output_apk {
             std::fs::copy(input_apk, output_apk).map_err(|e| crate::error::Error::Io(e))?;
         }
@@ -869,40 +915,17 @@ fn contains_slice(haystack: &[u8], needle: &[u8]) -> bool {
 }
 
 fn replace_text_in_all_methods(smali: &str, old: &str, new: &str) -> Result<String> {
-    let lines: Vec<&str> = smali.lines().collect();
-    let mut result = String::new();
-    let mut in_method = false;
-    let mut depth: i32 = 0;
-
-    for line in &lines {
-        let trimmed = line.trim();
-        if trimmed.starts_with(".method") {
-            depth += 1;
-            in_method = true;
-            result.push_str(line);
-            result.push('\n');
-        } else if trimmed == ".end method" {
-            depth -= 1;
-            if depth == 0 {
-                in_method = false;
-            }
-            result.push_str(line);
-            result.push('\n');
-        } else if in_method {
-            // Inside a method body: replace old with new
-            result.push_str(&line.replace(old, new));
-            result.push('\n');
-        } else {
-            // Outside methods: leave unchanged
-            result.push_str(line);
-            result.push('\n');
-        }
+    // Replace old with new everywhere in the smali text (like sed -i 's/old/new/g'),
+    // not just inside method bodies. This ensures .field declarations, annotations,
+    // and other non-method locations are also patched, so a second run won't find
+    // the old text again.
+    let mut result = String::with_capacity(smali.len());
+    for line in smali.lines() {
+        result.push_str(&line.replace(old, new));
+        result.push('\n');
     }
-
     Ok(result)
 }
-
-/// Extract one class as smali from an APK/JAR to a file.
 pub fn extract_smali_class(input_apk: &str, class_name: &str, output: &str) -> Result<()> {
     let file = File::open(input_apk)
         .map_err(|e| crate::error::Error::Io(e))?;
