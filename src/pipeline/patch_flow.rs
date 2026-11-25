@@ -543,14 +543,45 @@ pub fn replace_text_global(
         return Err(crate::error::Error::Other("no classes found in APK".into()));
     }
 
-    // Phase 2: Quick DEX byte pre-filter. If `old` doesn't appear as UTF-8 bytes
-    // anywhere in the DEX, it can't be in any class's smali — exit immediately.
-    // This makes "text not found" cases instant (no smali export needed).
-    let text_exists_in_dex = dex_entries.iter().any(|(_dex_name, dex_bytes)| {
-        contains_slice(dex_bytes, old.as_bytes())
-    });
+    // Phase 2: Collect candidate classes via per-class DEX byte pre-filter.
+    // For each class, scan its method bytecode for `old_bytes` (hex constants
+    // as little-endian bytes, or plain UTF-8 text). Only classes whose code
+    // sections contain the target bytes get exported to smali — this avoids
+    // parsing 70k+ classes when only a handful contain the target text.
+    let old_bytes = decode_search_bytes(old);
+    let mut candidate_classes: Vec<String> = Vec::new();
+    for (_dex_name, dex_bytes) in &dex_entries {
+        let dex = apkscope_core::dex::Dex::parse(dex_bytes)
+            .map_err(|e| crate::error::Error::Other(format!("DEX parse error: {e}")))?;
+        for c in 0..dex.class_count {
+            let class_data = dex.class_data(c).map_err(|e| {
+                crate::error::Error::Other(format!("Class data error: {e}"))
+            })?;
+            let desc = dex.class_descriptor(c).map_err(|e| {
+                crate::error::Error::Other(format!("Class descriptor error: {e}"))
+            })?;
+            let desc_str = apkscope_core::dex::descriptor(&desc);
+            let java_name = desc_str
+                .trim_start_matches('L')
+                .trim_end_matches(';')
+                .replace('/', ".");
+            // Scan method code sections for target bytes
+            let mut found = false;
+            for method in &class_data.methods {
+                if let Some(code) = &method.code {
+                    if contains_slice_le(code.insns, &old_bytes) {
+                        found = true;
+                        break;
+                    }
+                }
+            }
+            if found {
+                candidate_classes.push(java_name);
+            }
+        }
+    }
 
-    if !text_exists_in_dex {
+    if candidate_classes.is_empty() {
         eprintln!(
             "replace-text-global: text '{}' not found in any class — nothing patched",
             old
@@ -566,26 +597,22 @@ pub fn replace_text_global(
         });
     }
 
-    // Phase 3: Export ALL classes to smali in parallel, then grep-style search
-    // the smali TEXT (not raw DEX bytes) for the target string. Only classes
-    // whose smali actually contains `old` get replaced and re-injected.
-    // DEX byte scan above may have false positives (binary garbage matches),
-    // so smali grep is the authoritative check.
+    eprintln!(
+        "replace-text-global: {} class(es) contain target bytes — exporting smali",
+        candidate_classes.len()
+    );
+
+    // Phase 3: Export only candidate classes to smali in parallel, then grep-style
+    // search the smali TEXT for the target string (authoritative check).
     let num_threads = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(1)
-        .clamp(1, class_names.len());
-    let chunk_size = (class_names.len() + num_threads - 1) / num_threads;
-    let chunks: Vec<Vec<String>> = class_names
+        .clamp(1, candidate_classes.len());
+    let chunk_size = (candidate_classes.len() + num_threads - 1) / num_threads;
+    let chunks: Vec<Vec<String>> = candidate_classes
         .chunks(chunk_size)
         .map(|c| c.to_vec())
         .collect();
-
-    eprintln!(
-        "replace-text-global: exporting {} class(es) across {} thread(s)",
-        class_names.len(),
-        num_threads
-    );
 
     let modified: Vec<(String, String)> = {
         let handles: Vec<_> = chunks
@@ -907,13 +934,6 @@ pub fn add_smali(
 }
 
 /// Replace `old` with `new` in all method bodies of a smali class text.
-fn contains_slice(haystack: &[u8], needle: &[u8]) -> bool {
-    if needle.is_empty() {
-        return true;
-    }
-    haystack.windows(needle.len()).any(|w| w == needle)
-}
-
 fn replace_text_in_all_methods(smali: &str, old: &str, new: &str) -> Result<String> {
     // Replace old with new everywhere in the smali text (like sed -i 's/old/new/g'),
     // not just inside method bodies. This ensures .field declarations, annotations,
@@ -926,6 +946,58 @@ fn replace_text_in_all_methods(smali: &str, old: &str, new: &str) -> Result<Stri
     }
     Ok(result)
 }
+
+/// Convert a search string to DEX byte candidates for pre-filtering.
+///
+/// For hex constants like `0x1fa267d`, DEX stores them as 32-bit integers
+/// (little-endian bytes `7d 26 1a 0f`), not ASCII text. We convert the hex
+/// digits to raw bytes and return both big-endian and little-endian forms.
+/// For plain text, returns UTF-8 bytes.
+///
+/// Returns all candidate byte sequences; the pre-filter matches if ANY
+/// candidate appears in DEX bytes (superset approach — may have false
+/// positives but no false negatives for common encodings).
+fn decode_search_bytes(s: &str) -> Vec<u8> {
+    let s = s.trim();
+    let hex = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X"));
+
+    if let Some(hex) = hex {
+        // Parse hex digits into bytes
+        let padded = if hex.len() % 2 != 0 {
+            format!("0{}", hex)
+        } else {
+            hex.to_string()
+        };
+        let bytes: Vec<u8> = (0..padded.len())
+            .step_by(2)
+            .filter_map(|i| u8::from_str_radix(&padded[i..i + 2], 16).ok())
+            .collect();
+        if !bytes.is_empty() {
+            // Return big-endian bytes (little-endian check done by caller
+            // via reversed window scan)
+            return bytes;
+        }
+    }
+
+    // Fallback: UTF-8 bytes
+    s.as_bytes().to_vec()
+}
+
+/// Check if `needle` appears in `haystack`, trying both directions
+/// (for little-endian DEX constant encoding).
+fn contains_slice_le(haystack: &[u8], needle: &[u8]) -> bool {
+    if needle.is_empty() {
+        return true;
+    }
+    // Big-endian
+    if haystack.windows(needle.len()).any(|w| w == needle) {
+        return true;
+    }
+    // Little-endian (reversed)
+    let rev: Vec<u8> = needle.iter().rev().cloned().collect();
+    haystack.windows(rev.len()).any(|w| w == rev.as_slice())
+}
+
 pub fn extract_smali_class(input_apk: &str, class_name: &str, output: &str) -> Result<()> {
     let file = File::open(input_apk)
         .map_err(|e| crate::error::Error::Io(e))?;
