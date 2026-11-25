@@ -7,7 +7,8 @@ with optional GUI (egui) and CLI.
 ## Features
 
 - **No full extraction**: Open and patch APKs in place — only the classes you touch are parsed.
-- **Method-level smali patching**: View and edit individual smali methods without touching the rest of the class.
+- **Method-level smali patching**: View and edit individual smali methods without touching the rest of the class. Supports `--smali-file` (file or stdin) and `--smali-body` (inline).
+- **Bulk smali operations**: Extract all classes as smali files (`extract-smali-all`), inject a directory of smali files back (`inject-smali-all`), or add a single new smali class (`add-smali`).
 - **Signature preserve mode**: Extract original `META-INF/` signatures, patch the APK, then restore the original signature block (same workflow as APKEditor's `d -t sig` / `b -t sig`).
 - **Optional signing**: Sign with your own keystore (JKS/PKCS#12) or leave unsigned.
 - **CLI + GUI**: Native CLI for scripting, optional egui GUI for interactive work.
@@ -92,6 +93,124 @@ ApkToolKit patch SystemUI.apk SystemUI_signed.apk \
     --smali-file onCreate.smali \
     --sign --ks platform.jks --ks-alias platform
 ```
+
+## Smali Editing
+
+ApkToolKit works directly on smali (DEX bytecode in text form). You never need to fully decompile/recompile the APK — only the methods/classes you touch are rewritten.
+
+### View smali
+
+View a whole class or a single method. Output format defaults to smali; use `--format java` for decompiled Java.
+
+```bash
+# Whole class as smali
+ApkToolKit view SystemUI.apk com.android.systemui.StatusBar --smali
+
+# One method as smali
+ApkToolKit view SystemUI.apk com.android.systemui.StatusBar --method onCreate --smali
+
+# Dump a method to a file for editing
+ApkToolKit view SystemUI.apk com.android.systemui.StatusBar --method onCreate --smali > onCreate.smali
+```
+
+### Patch a method from a smali file
+
+```bash
+# 1. Dump the method
+ApkToolKit view SystemUI.apk com.android.systemui.StatusBar --method onCreate --smali > onCreate.smali
+
+# 2. Edit onCreate.smali (change smali instructions, registers, strings, etc.)
+
+# 3. Patch + rebuild (unsigned, META-INF stripped)
+ApkToolKit patch SystemUI.apk SystemUI_modded.apk \
+    com.android.systemui.StatusBar \
+    onCreate \
+    --smali-file onCreate.smali \
+    --no-sign
+```
+
+You can also pipe a smali file from stdin:
+
+```bash
+cat onCreate.smali | ApkToolKit patch SystemUI.apk SystemUI_modded.apk \
+    com.android.systemui.StatusBar \
+    onCreate \
+    --smali-file - \
+    --no-sign
+```
+
+### Patch a method with inline smali body
+
+Use `--smali-body` to pass the method body directly (without the `.method`/`.end method` wrapper lines):
+
+```bash
+ApkToolKit patch SystemUI.apk SystemUI_modded.apk \
+    com.android.systemui.StatusBar \
+    onCreate \
+    --smali-body 'const/4 v0, 0x1\nreturn v0' \
+    --no-sign
+```
+
+### Patch multiple methods at once (multi-patch)
+
+`multi-patch` lets you change several methods in a single rebuild pass. Each patch spec is `Class#method=smali_file` or `Class#method=smali_body`.
+
+```bash
+ApkToolKit multi-patch SystemUI.apk SystemUI_modded.apk \
+    --patch com.android.systemui.StatusBar#onCreate=onCreate.smali \
+    --patch com.android.systemui.StatusBar#onResume=onResume.smali \
+    --patch_body com.android.systemui.StatusBar#onPause='const/4 v0, 0x0\nreturn v0' \
+    --no-sign
+```
+
+### Add / extract / inject whole smali classes
+
+Add a brand-new smali class as a DEX entry:
+
+```bash
+ApkToolKit add-smali SystemUI.apk SystemUI_modded.apk \
+    ./MyNewClass.smali \
+    --no-sign
+```
+
+Extract every class in an APK to individual `.smali` files:
+
+```bash
+ApkToolKit extract-smali-all SystemUI.apk ./smali_out/
+```
+
+Inject a directory of modified smali files back into an APK:
+
+```bash
+ApkToolKit inject-smali-all SystemUI.apk SystemUI_modded.apk \
+    ./smali_out/ \
+    --no-sign
+```
+
+Extract or inject a single class:
+
+```bash
+# Extract one class to a smali file
+ApkToolKit extract-smali-class SystemUI.apk com.android.systemui.StatusBar ./StatusBar.smali
+
+# Inject one modified smali class back
+ApkToolKit inject-smali-class SystemUI.apk SystemUI_modded.apk \
+    com.android.systemui.StatusBar \
+    ./StatusBar.smali \
+    --no-sign
+```
+
+### Smali quick reference
+
+- **Registers**: local variables are `v0`, `v1`, … (wide types like `double`/`long` take two registers).
+- **Method signature**: `Lcom/android/systemui/StatusBar;->onCreate(Landroid/os/Bundle;)V`
+  - `L<class>;-><method>(<args>)<return>`
+  - `V` = void, `Z` = boolean, `B` = byte, `S` = short, `C` = char, `I` = int, `J` = long, `F` = float, `D` = double, `[` = array, `L<class>;` = object.
+- **Body wrapper**: a smali method body passed to `--smali-body`/`--smali-file` should contain the instructions between `.method` and `.end method` (those wrapper lines are added automatically for inline bodies).
+- **Labels**: branch targets use `:`-prefixed labels (e.g. `:cond_0`).
+- **String constants**: `const-string v0, "hello world"`.
+- **Field access**: `sget`/`sput` (static), `iget`/`iput` (instance), `sget-object`/`iput-object`, etc.
+- **Method invocation**: `invoke-virtual`, `invoke-static`, `invoke-direct`, `invoke-super`, `invoke-interface`, `invoke-virtual/range`, etc.
 
 ## GUI
 
