@@ -36,9 +36,7 @@ pub fn extract_signatures<P: AsRef<Path>, Q: AsRef<Path>>(
         }
     }
 
-    // Also extract the APK signing block (v2/v3) if present, so it can be
-    // restored after a rebuild — matching APKEditor's -sig workflow. This is
-    // required for apps (such as SystemUI) that carry no v1 (JAR) signature.
+    // Also extract the APK signing block (v2/v3) if present.
     if let Some(block) = read_signing_block_bytes(apk_path.as_ref()) {
         let out_path = output_dir.as_ref().join(SIGNING_BLOCK_FILE);
         fs::write(&out_path, &block).map_err(|e| crate::error::Error::Io(e))?;
@@ -54,72 +52,47 @@ pub fn restore_signatures<P: AsRef<Path>, Q: AsRef<Path>, R: AsRef<Path>>(
     sig_dir: Q,
     output_path: R,
 ) -> Result<()> {
-    let file = File::open(source_apk.as_ref()).map_err(|e| crate::error::Error::Io(e))?;
-    let mut zip = zip::ZipArchive::new(file).map_err(|e| crate::error::Error::Zip(e))?;
-
+    let source_apk = source_apk.as_ref();
     let sig_dir = sig_dir.as_ref();
     let output_path = output_path.as_ref();
 
+    // Collect signature files from sig_dir (including META-INF tree and signing-block.bin).
     let mut sig_files: Vec<(String, Vec<u8>)> = Vec::new();
     collect_sig_files(sig_dir, sig_dir, &mut sig_files)?;
 
-    // Write the (unsigned) zip to a temporary file first; the signing block,
-    // if any, is inserted afterwards.
-    let temp_zip = format!("{}.unsigned", output_path.display());
-    // Remove stale temp file if present.
-    let _ = fs::remove_file(&temp_zip);
-
-    let out_file = File::create(&temp_zip).map_err(|e| crate::error::Error::Io(e))?;
-    let mut out_zip = zip::ZipWriter::new(out_file);
-
-    for i in 0..zip.len() {
-        let mut entry = zip.by_index(i).map_err(|e| crate::error::Error::Zip(e))?;
-        let name = entry.name().to_owned();
-
-        if name.starts_with("META-INF/") {
-            continue;
-        }
-
-        let method = match entry.compression() {
-            zip::CompressionMethod::Stored => zip::CompressionMethod::Stored,
-            zip::CompressionMethod::Deflated => zip::CompressionMethod::Deflated,
-            _ => zip::CompressionMethod::Stored,
-        };
-        let options = zip::write::FileOptions::default().compression_method(method);
-
-        let mut buf = Vec::new();
-        Read::read_to_end(&mut entry, &mut buf).map_err(|e| crate::error::Error::Io(e))?;
-
-        out_zip
-            .start_file(name, options)
-            .map_err(|e| crate::error::Error::Zip(e))?;
-        out_zip.write_all(&buf).map_err(|e| crate::error::Error::Io(e))?;
-    }
+    // Use apkscope-core to rebuild with META-INF entries restored, preserving
+    // alignment and compression of all other entries.
+    let mut file = File::open(source_apk).map_err(|e| crate::error::Error::Io(e))?;
+    let mut apk = apkscope_core::apk::Apk::new(&mut file)
+        .map_err(|e| crate::error::Error::Other(format!("Failed to open APK: {e}")))?;
 
     for (rel_name, data) in &sig_files {
-        // Skip the extracted signing-block blob: it is not a zip entry.
         if rel_name == SIGNING_BLOCK_FILE {
             continue;
         }
         let entry_name = format!("META-INF/{rel_name}");
-        let options = zip::write::FileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored);
-        out_zip
-            .start_file(entry_name, options)
-            .map_err(|e| crate::error::Error::Zip(e))?;
-        out_zip.write_all(data).map_err(|e| crate::error::Error::Io(e))?;
+        apk.put_entry(&entry_name, data.clone())
+            .map_err(|e| crate::error::Error::Other(format!("Failed to put entry {entry_name}: {e}")))?;
     }
 
-    out_zip.finish().map_err(|e| crate::error::Error::Zip(e))?;
+    let temp_output = format!("{}.tmp", output_path.display());
+    let _ = fs::remove_file(&temp_output);
+    {
+        let mut out_file = File::create(&temp_output).map_err(|e| crate::error::Error::Io(e))?;
+        let _bytes_written = apk.rebuild(&mut out_file).map_err(|e| {
+            crate::error::Error::Rebuild(e.to_string())
+        })?;
+        out_file.flush().map_err(|e| crate::error::Error::Io(e))?;
+    }
 
-    // Restore the APK signing block (v2/v3) if it was extracted.
+    // Restore the APK signing block (v2/v3) if present.
     let block_path = sig_dir.join(SIGNING_BLOCK_FILE);
     if block_path.exists() {
         let block = fs::read(&block_path).map_err(|e| crate::error::Error::Io(e))?;
-        insert_signing_block(Path::new(&temp_zip), &block, output_path)?;
-        let _ = fs::remove_file(&temp_zip);
+        insert_signing_block(Path::new(&temp_output), &block, output_path)?;
+        let _ = fs::remove_file(&temp_output);
     } else {
-        fs::rename(&temp_zip, output_path).map_err(|e| crate::error::Error::Io(e))?;
+        fs::rename(&temp_output, output_path).map_err(|e| crate::error::Error::Io(e))?;
     }
 
     Ok(())
@@ -198,7 +171,6 @@ fn insert_signing_block(source_apk: &Path, block: &[u8], output_path: &Path) -> 
     out.extend_from_slice(block);
     out.extend_from_slice(&data[cd_offset..]);
 
-    // Fix up the central directory offset in the (shifted) EOCD record.
     let new_idx = idx + block.len();
     let new_cd_offset = cd_offset + block.len();
     if new_idx + 20 > out.len() {
