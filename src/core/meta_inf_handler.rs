@@ -27,8 +27,7 @@ impl MetaInfInfo {
 
 /// Inspect META-INF of an APK.
 pub fn inspect_meta_inf<P: AsRef<Path>>(apk_path: P) -> Result<MetaInfInfo> {
-    let entries = crate::core::apk_reader::list_meta_inf_entries(apk_path)?;
-
+    let entries = crate::core::apk_reader::list_meta_inf_entries(&apk_path)?;
     let mut info = MetaInfInfo::new();
     info.exists = !entries.is_empty();
     info.entries = entries.clone();
@@ -44,9 +43,12 @@ pub fn inspect_meta_inf<P: AsRef<Path>>(apk_path: P) -> Result<MetaInfInfo> {
                 info.has_v1 = true;
             }
         }
-        if entry == "META-INF/ANDROIDMSAFE.DSA" || entry == "META-INF/ANDROIDMSAFE.RSA" {
-            info.has_v2 = true;
-        }
+    }
+
+    // v2/v3 signatures live in the APK signing block, not in META-INF.
+    if crate::core::signature_handler::signing_block_present(&apk_path) {
+        info.has_v2 = true;
+        info.has_v3 = true;
     }
 
     Ok(info)
