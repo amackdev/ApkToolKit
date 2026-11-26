@@ -189,6 +189,10 @@ pub enum Commands {
         /// Replacement text.
         new: String,
 
+        /// Restore signatures from this directory instead of signing.
+        #[arg(long)]
+        sig_dir: Option<String>,
+
         /// Do not sign (output will be unsigned).
         #[arg(long)]
         no_sign: bool,
@@ -214,6 +218,10 @@ pub enum Commands {
 
         /// Text to insert.
         text: String,
+
+        /// Restore signatures from this directory instead of signing.
+        #[arg(long)]
+        sig_dir: Option<String>,
 
         /// Do not sign (output will be unsigned).
         #[arg(long)]
@@ -241,6 +249,10 @@ pub enum Commands {
         /// Text to insert.
         text: String,
 
+        /// Restore signatures from this directory instead of signing.
+        #[arg(long)]
+        sig_dir: Option<String>,
+
         /// Do not sign (output will be unsigned).
         #[arg(long)]
         no_sign: bool,
@@ -263,6 +275,10 @@ pub enum Commands {
 
         /// Pattern to match (lines containing this are removed).
         pattern: String,
+
+        /// Restore signatures from this directory instead of signing.
+        #[arg(long)]
+        sig_dir: Option<String>,
 
         /// Do not sign (output will be unsigned).
         #[arg(long)]
@@ -289,6 +305,10 @@ pub enum Commands {
         #[arg(long)]
         smali_body: String,
 
+        /// Restore signatures from this directory instead of signing.
+        #[arg(long)]
+        sig_dir: Option<String>,
+
         /// Do not sign (output will be unsigned).
         #[arg(long)]
         no_sign: bool,
@@ -312,6 +332,10 @@ pub enum Commands {
         /// Replacement text.
         new: String,
 
+        /// Restore signatures from this directory instead of signing.
+        #[arg(long)]
+        sig_dir: Option<String>,
+
         /// Do not sign (output will be unsigned).
         #[arg(long)]
         no_sign: bool,
@@ -331,6 +355,10 @@ pub enum Commands {
 
         /// Replacement text.
         new: String,
+
+        /// Restore signatures from this directory instead of signing.
+        #[arg(long)]
+        sig_dir: Option<String>,
 
         /// Do not sign (output will be unsigned).
         #[arg(long)]
@@ -353,6 +381,10 @@ pub enum Commands {
 
         /// New byte sequence (same byte length as old_hex).
         new_hex: String,
+
+        /// Restore signatures from this directory instead of signing.
+        #[arg(long)]
+        sig_dir: Option<String>,
 
         /// Do not sign (output will be unsigned).
         #[arg(long)]
@@ -387,6 +419,10 @@ pub enum Commands {
         /// Input file path.
         input_file: String,
 
+        /// Restore signatures from this directory instead of signing.
+        #[arg(long)]
+        sig_dir: Option<String>,
+
         /// Do not sign (output will be unsigned).
         #[arg(long)]
         no_sign: bool,
@@ -403,6 +439,31 @@ pub enum Commands {
 
         /// Path to the smali source file.
         smali_file: String,
+
+        /// Restore signatures from this directory instead of signing.
+        #[arg(long)]
+        sig_dir: Option<String>,
+
+        /// Do not sign (output will be unsigned).
+        #[arg(long)]
+        no_sign: bool,
+    },
+
+    /// Add all smali files from a directory or zip as new DEX classes in one pass.
+    #[command(name = "add-smali-all")]
+    AddSmaliAll {
+        /// Input APK or JAR file.
+        input: String,
+
+        /// Output APK or JAR file.
+        output: String,
+
+        /// Directory or .zip file containing .smali files (searched recursively).
+        smali_path: String,
+
+        /// Restore signatures from this directory instead of signing.
+        #[arg(long)]
+        sig_dir: Option<String>,
 
         /// Do not sign (output will be unsigned).
         #[arg(long)]
@@ -430,6 +491,10 @@ pub enum Commands {
 
         /// Directory containing smali files to inject.
         smali_dir: String,
+
+        /// Restore signatures from this directory instead of signing.
+        #[arg(long)]
+        sig_dir: Option<String>,
 
         /// Do not sign (output will be unsigned).
         #[arg(long)]
@@ -464,6 +529,10 @@ pub enum Commands {
         /// Input smali file path.
         smali_file: String,
 
+        /// Restore signatures from this directory instead of signing.
+        #[arg(long)]
+        sig_dir: Option<String>,
+
         /// Do not sign (output will be unsigned).
         #[arg(long)]
         no_sign: bool,
@@ -497,6 +566,10 @@ pub enum Commands {
         /// Input file path.
         input_file: String,
 
+        /// Restore signatures from this directory instead of signing.
+        #[arg(long)]
+        sig_dir: Option<String>,
+
         /// Do not sign (output will be unsigned).
         #[arg(long)]
         no_sign: bool,
@@ -514,6 +587,10 @@ pub enum Commands {
 
         /// Directory containing resources to put back.
         input_dir: String,
+
+        /// Restore signatures from this directory instead of signing.
+        #[arg(long)]
+        sig_dir: Option<String>,
 
         /// Do not sign (output will be unsigned).
         #[arg(long)]

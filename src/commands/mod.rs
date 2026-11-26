@@ -82,6 +82,7 @@ pub fn run(cmd: Commands, _global_opts: &GlobalOpts) -> Result<()> {
             method,
             old,
             new,
+            sig_dir,
             no_sign,
         } => replace_text::run(
             &input,
@@ -90,6 +91,7 @@ pub fn run(cmd: Commands, _global_opts: &GlobalOpts) -> Result<()> {
             &method,
             &old,
             &new,
+            sig_dir.as_deref(),
             no_sign,
         ),
         Commands::InsertAfter {
@@ -99,6 +101,7 @@ pub fn run(cmd: Commands, _global_opts: &GlobalOpts) -> Result<()> {
             method,
             anchor,
             text,
+            sig_dir,
             no_sign,
         } => insert_after::run(
             &input,
@@ -107,6 +110,7 @@ pub fn run(cmd: Commands, _global_opts: &GlobalOpts) -> Result<()> {
             &method,
             &anchor,
             &text,
+            sig_dir.as_deref(),
             no_sign,
         ),
         Commands::InsertBefore {
@@ -116,6 +120,7 @@ pub fn run(cmd: Commands, _global_opts: &GlobalOpts) -> Result<()> {
             method,
             anchor,
             text,
+            sig_dir,
             no_sign,
         } => insert_before::run(
             &input,
@@ -124,6 +129,7 @@ pub fn run(cmd: Commands, _global_opts: &GlobalOpts) -> Result<()> {
             &method,
             &anchor,
             &text,
+            sig_dir.as_deref(),
             no_sign,
         ),
         Commands::RemoveLines {
@@ -132,6 +138,7 @@ pub fn run(cmd: Commands, _global_opts: &GlobalOpts) -> Result<()> {
             class,
             method,
             pattern,
+            sig_dir,
             no_sign,
         } => remove_lines::run(
             &input,
@@ -139,6 +146,7 @@ pub fn run(cmd: Commands, _global_opts: &GlobalOpts) -> Result<()> {
             &class,
             &method,
             &pattern,
+            sig_dir.as_deref(),
             no_sign,
         ),
         Commands::AppendMethod {
@@ -147,6 +155,7 @@ pub fn run(cmd: Commands, _global_opts: &GlobalOpts) -> Result<()> {
             class,
             method_decl,
             smali_body,
+            sig_dir,
             no_sign,
         } => append_method::run(
             &input,
@@ -154,6 +163,7 @@ pub fn run(cmd: Commands, _global_opts: &GlobalOpts) -> Result<()> {
             &class,
             &method_decl,
             &smali_body,
+            sig_dir.as_deref(),
             no_sign,
         ),
         Commands::ReplaceTextClass {
@@ -162,6 +172,7 @@ pub fn run(cmd: Commands, _global_opts: &GlobalOpts) -> Result<()> {
             class,
             old,
             new,
+            sig_dir,
             no_sign,
         } => replace_text_class::run(
             &input,
@@ -169,6 +180,7 @@ pub fn run(cmd: Commands, _global_opts: &GlobalOpts) -> Result<()> {
             &class,
             &old,
             &new,
+            sig_dir.as_deref(),
             no_sign,
         ),
         Commands::ReplaceTextGlobal {
@@ -176,16 +188,18 @@ pub fn run(cmd: Commands, _global_opts: &GlobalOpts) -> Result<()> {
             output,
             old,
             new,
+            sig_dir,
             no_sign,
-        } => replace_text_global::run(&input, &output, &old, &new, no_sign),
+        } => replace_text_global::run(&input, &output, &old, &new, sig_dir.as_deref(), no_sign),
         Commands::ReplaceBytesGlobal {
             input,
             output,
             old_hex,
             new_hex,
+            sig_dir,
             no_sign,
         } => {
-            let sig_dir = if no_sign { None } else { None };
+            let sig_dir = if no_sign { None } else { sig_dir.as_deref() };
             let result = patch_flow::replace_bytes_global(
                 &input,
                 &output,
@@ -210,14 +224,36 @@ pub fn run(cmd: Commands, _global_opts: &GlobalOpts) -> Result<()> {
             output,
             entry,
             input_file,
-            ..
-        } => put_entry::run(&input, &output, &entry, &input_file),
+            sig_dir,
+            no_sign,
+        } => put_entry::run(
+            &input,
+            &output,
+            &entry,
+            &input_file,
+            sig_dir.as_deref(),
+            no_sign,
+        ),
         Commands::AddSmali {
             input,
             output,
             smali_file,
+            sig_dir,
             no_sign,
-        } => add_smali::run(&input, &output, &smali_file, no_sign),
+        } => add_smali::run(&input, &output, &smali_file, sig_dir.as_deref(), no_sign),
+        Commands::AddSmaliAll {
+            input,
+            output,
+            smali_path,
+            sig_dir,
+            no_sign,
+        } => {
+            let sig_dir = if no_sign { None } else { sig_dir.as_deref() };
+            let result = patch_flow::add_smali_all(&input, &output, &smali_path, sig_dir)?;
+            println!("Added smali classes from {} (unsigned/restore as requested).", smali_path);
+            println!("Output: {}", result.output_path);
+            Ok(())
+        }
         Commands::ExtractSmaliAll {
             input,
             output_dir,
@@ -230,9 +266,10 @@ pub fn run(cmd: Commands, _global_opts: &GlobalOpts) -> Result<()> {
             input,
             output,
             smali_dir,
+            sig_dir,
             no_sign,
         } => {
-            let sig_dir = if no_sign { None } else { None };
+            let sig_dir = if no_sign { None } else { sig_dir.as_deref() };
             let result =
                 patch_flow::inject_smali_all(&input, &output, &smali_dir, sig_dir)?;
             println!(
@@ -256,9 +293,10 @@ pub fn run(cmd: Commands, _global_opts: &GlobalOpts) -> Result<()> {
             output,
             class,
             smali_file,
+            sig_dir,
             no_sign,
         } => {
-            let sig_dir = if no_sign { None } else { None };
+            let sig_dir = if no_sign { None } else { sig_dir.as_deref() };
             let result = patch_flow::inject_smali_class(
                 &input,
                 &output,
@@ -303,6 +341,7 @@ pub fn run(cmd: Commands, _global_opts: &GlobalOpts) -> Result<()> {
             output,
             resource,
             input_file,
+            sig_dir,
             no_sign,
         } => {
             let _no_sign = no_sign;
@@ -363,7 +402,8 @@ pub fn run(cmd: Commands, _global_opts: &GlobalOpts) -> Result<()> {
             input,
             output,
             input_dir,
+            sig_dir,
             no_sign,
-        } => put_resource_all::run(&input, &output, &input_dir, no_sign),
+        } => put_resource_all::run(&input, &output, &input_dir, sig_dir.as_deref(), no_sign),
     }
 }

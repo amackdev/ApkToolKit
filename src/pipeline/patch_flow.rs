@@ -1324,3 +1324,169 @@ pub fn inject_smali_all(
         signatures_restored,
     })
 }
+
+/// Add all smali files from a directory or zip archive into an APK/JAR.
+/// New classes are placed into existing DEX files that have free capacity when
+/// possible, and any that do not fit are assembled into new classesN.dex files.
+pub fn add_smali_all(
+    input_apk: &str,
+    output_apk: &str,
+    smali_path: &str,
+    sig_dir: Option<&str>,
+) -> Result<PatchResult> {
+    // Collect smali sources from a directory or zip file.
+    let mut sources: Vec<(String, String)> = Vec::new();
+    let temp_dir;
+    let dir = if std::path::Path::new(smali_path).is_dir() {
+        std::path::PathBuf::from(smali_path)
+    } else if smali_path.ends_with(".zip") {
+        temp_dir = std::env::temp_dir().join(format!("add_smali_all_{}", std::process::id()));
+        std::fs::create_dir_all(&temp_dir).map_err(|e| crate::error::Error::Io(e))?;
+        let file = File::open(smali_path).map_err(|e| crate::error::Error::Io(e))?;
+        let mut zip = zip::ZipArchive::new(file).map_err(|e| crate::error::Error::Zip(e))?;
+        for i in 0..zip.len() {
+            let mut entry = zip.by_index(i).map_err(|e| crate::error::Error::Zip(e))?;
+            let name = entry.name().to_owned();
+            if name.ends_with(".smali") && !entry.is_dir() {
+                let mut buf = String::new();
+                std::io::Read::read_to_string(&mut entry, &mut buf).map_err(|e| crate::error::Error::Io(e))?;
+                let out_path = temp_dir.join(&name);
+                if let Some(parent) = out_path.parent() {
+                    std::fs::create_dir_all(parent).map_err(|e| crate::error::Error::Io(e))?;
+                }
+                std::fs::write(&out_path, &buf).map_err(|e| crate::error::Error::Io(e))?;
+            }
+        }
+        temp_dir
+    } else {
+        return Err(crate::error::Error::Other("smali path must be a directory or .zip file".into()));
+    };
+
+    fn collect(dir: &std::path::Path, base: &std::path::Path, out: &mut Vec<(String, String)>) -> Result<()> {
+        for entry in std::fs::read_dir(dir).map_err(|e| crate::error::Error::Io(e))? {
+            let entry = entry.map_err(|e| crate::error::Error::Io(e))?;
+            let path = entry.path();
+            if path.is_dir() {
+                collect(&path, base, out)?;
+            } else if path.extension().and_then(|e| e.to_str()) == Some("smali") {
+                let text = std::fs::read_to_string(&path).map_err(|e| crate::error::Error::Io(e))?;
+                out.push((path.strip_prefix(base).unwrap_or(&path).to_string_lossy().replace('\\', "/"), text));
+            }
+        }
+        Ok(())
+    }
+    collect(&dir, &dir, &mut sources)?;
+
+    if sources.is_empty() {
+        if smali_path.ends_with(".zip") {
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+        return Err(crate::error::Error::Other("no smali files found".into()));
+    }
+
+    let file = File::open(input_apk).map_err(|e| crate::error::Error::Io(e))?;
+    let mut apk = apkscope_core::apk::Apk::new(file)
+        .map_err(|e| crate::error::Error::Other(format!("Failed to open APK: {e}")))?;
+
+    let dex_entries = apk.dex().map_err(|e| crate::error::Error::Other(format!("Failed to read DEX: {e}")))?;
+
+    let mut base_class_counts: Vec<usize> = Vec::with_capacity(dex_entries.len());
+    let mut base_method_counts: Vec<usize> = Vec::with_capacity(dex_entries.len());
+    let mut base_string_counts: Vec<usize> = Vec::with_capacity(dex_entries.len());
+    for (_, bytes) in &dex_entries {
+        if let Ok(dex) = apkscope_core::dex::Dex::parse(bytes) {
+            let counts = dex.counts();
+            base_class_counts.push(dex.class_count);
+            base_method_counts.push(counts[3]);
+            base_string_counts.push(counts[0]);
+        } else {
+            base_class_counts.push(usize::MAX);
+            base_method_counts.push(usize::MAX);
+            base_string_counts.push(usize::MAX);
+        }
+    }
+    let mut added_class_counts = vec![0usize; dex_entries.len()];
+    let mut added_method_counts = vec![0usize; dex_entries.len()];
+    let mut added_string_counts = vec![0usize; dex_entries.len()];
+
+    let mut leftover: Vec<String> = Vec::new();
+
+    {
+        let classes = apk.classes().map_err(|e| crate::error::Error::Other(format!("Failed to access APK classes: {e}")))?;
+        for (_rel, text) in &sources {
+            let method_count = text.matches(".method").count().max(1);
+            let mut target: Option<usize> = None;
+            for idx in 0..dex_entries.len() {
+                if base_class_counts[idx] == usize::MAX { continue; }
+                if base_class_counts[idx] + added_class_counts[idx] + 1 >= 64000 { continue; }
+                if base_method_counts[idx] + added_method_counts[idx] + method_count >= 64000 { continue; }
+                if base_string_counts[idx] + added_string_counts[idx] + 64 >= 65536 { continue; }
+                target = Some(idx);
+                break;
+            }
+            if let Some(idx) = target {
+                classes.set_text_in(idx, text).map_err(|e| crate::error::Error::Other(format!("Failed to add smali: {e}")))?;
+                added_class_counts[idx] += 1;
+                added_method_counts[idx] += method_count;
+                added_string_counts[idx] += 64;
+            } else {
+                leftover.push(text.clone());
+            }
+        }
+    }
+
+    if !leftover.is_empty() {
+        let mut max_dex = 0;
+        for (name, _) in &dex_entries {
+            let num: u32 = name.trim_start_matches("classes").trim_end_matches(".dex").parse().unwrap_or(1);
+            if num > max_dex { max_dex = num; }
+        }
+        let dex_version = dex_entries.first().and_then(|(_, bytes)| bytes.get(4..7)).map(|v| [v[0], v[1], v[2]]).unwrap_or(*b"035");
+        let refs: Vec<&str> = leftover.iter().map(|s| s.as_str()).collect();
+        match apkscope_core::smali::assemble(&refs, dex_version) {
+            Ok(dex_bytes) => {
+                let next_dex = format!("classes{}.dex", max_dex + 1);
+                apk.put_entry(&next_dex, dex_bytes).map_err(|e| crate::error::Error::Other(format!("Failed to put entry {next_dex}: {e}")))?;
+            }
+            Err(_) => {
+                let mut n = max_dex + 1;
+                for src in &leftover {
+                    let dex_bytes = apkscope_core::smali::assemble(&[src.as_str()], dex_version)
+                        .map_err(|e| crate::error::Error::Other(format!("Smali assemble error: {e}")))?;
+                    let name = format!("classes{}.dex", n);
+                    apk.put_entry(&name, dex_bytes).map_err(|e| crate::error::Error::Other(format!("Failed to put entry {name}: {e}")))?;
+                    n += 1;
+                }
+            }
+        }
+    }
+
+    let _edits = apk.edits().map_err(|e| crate::error::Error::Other(format!("Failed to write APK edits: {e}")))?;
+
+    let temp_output = format!("{output_apk}.tmp");
+    {
+        let mut out_file = File::create(&temp_output).map_err(|e| crate::error::Error::Io(e))?;
+        let _bytes_written = apk.rebuild(&mut out_file).map_err(|e| crate::error::Error::Rebuild(e.to_string()))?;
+        out_file.flush().map_err(|e| crate::error::Error::Io(e))?;
+    }
+
+    let signatures_restored = if let Some(dir) = sig_dir {
+        crate::core::signature_handler::restore_signatures(&temp_output, dir, output_apk)?;
+        let _ = std::fs::remove_file(&temp_output);
+        true
+    } else {
+        std::fs::rename(&temp_output, output_apk).map_err(|e| crate::error::Error::Io(e))?;
+        false
+    };
+
+    if smali_path.ends_with(".zip") {
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    Ok(PatchResult {
+        output_path: output_apk.to_string(),
+        class_patched: String::new(),
+        method_patched: String::new(),
+        signatures_restored,
+    })
+}
