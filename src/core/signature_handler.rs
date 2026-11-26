@@ -72,9 +72,6 @@ pub fn restore_signatures<P: AsRef<Path>, Q: AsRef<Path>, R: AsRef<Path>>(
     let out_file = File::create(&temp_zip).map_err(|e| crate::error::Error::Io(e))?;
     let mut out_zip = zip::ZipWriter::new(out_file);
 
-    let options = zip::write::FileOptions::default()
-        .compression_method(zip::CompressionMethod::Stored);
-
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i).map_err(|e| crate::error::Error::Zip(e))?;
         let name = entry.name().to_owned();
@@ -82,6 +79,13 @@ pub fn restore_signatures<P: AsRef<Path>, Q: AsRef<Path>, R: AsRef<Path>>(
         if name.starts_with("META-INF/") {
             continue;
         }
+
+        let method = match entry.compression() {
+            zip::CompressionMethod::Stored => zip::CompressionMethod::Stored,
+            zip::CompressionMethod::Deflated => zip::CompressionMethod::Deflated,
+            _ => zip::CompressionMethod::Stored,
+        };
+        let options = zip::write::FileOptions::default().compression_method(method);
 
         let mut buf = Vec::new();
         Read::read_to_end(&mut entry, &mut buf).map_err(|e| crate::error::Error::Io(e))?;
@@ -98,6 +102,8 @@ pub fn restore_signatures<P: AsRef<Path>, Q: AsRef<Path>, R: AsRef<Path>>(
             continue;
         }
         let entry_name = format!("META-INF/{rel_name}");
+        let options = zip::write::FileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
         out_zip
             .start_file(entry_name, options)
             .map_err(|e| crate::error::Error::Zip(e))?;
