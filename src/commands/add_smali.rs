@@ -7,9 +7,10 @@ pub fn run(
     input: &str,
     output: &str,
     smali_file: &str,
+    sig_dir: Option<&str>,
     no_sign: bool,
 ) -> Result<()> {
-    let sig_dir = if no_sign { None } else { None };
+    let sig_dir = if no_sign { None } else { sig_dir };
 
     let result = patch_flow::add_smali(input, output, smali_file, sig_dir)?;
 

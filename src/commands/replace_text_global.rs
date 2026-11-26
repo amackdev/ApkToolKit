@@ -8,9 +8,10 @@ pub fn run(
     output: &str,
     old: &str,
     new: &str,
+    sig_dir: Option<&str>,
     no_sign: bool,
 ) -> Result<()> {
-    let sig_dir = if no_sign { None } else { None };
+    let sig_dir = if no_sign { None } else { sig_dir };
 
     let result = patch_flow::replace_text_global(input, output, old, new, sig_dir)?;
 

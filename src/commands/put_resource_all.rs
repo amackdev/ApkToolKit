@@ -10,7 +10,14 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
-pub fn run(input: &str, output: &str, input_dir: &str, no_sign: bool) -> Result<()> {
+pub fn run(
+    input: &str,
+    output: &str,
+    input_dir: &str,
+    sig_dir: Option<&str>,
+    no_sign: bool,
+) -> Result<()> {
+    let sig_dir = if no_sign { None } else { sig_dir };
     let input_dir_path = Path::new(input_dir);
     if !input_dir_path.is_dir() {
         return Err(crate::error::Error::Other(format!(
@@ -58,10 +65,15 @@ pub fn run(input: &str, output: &str, input_dir: &str, no_sign: bool) -> Result<
         out_file.flush().map_err(|e| crate::error::Error::Io(e))?;
     }
 
-    std::fs::rename(&temp_output, output).map_err(|e| crate::error::Error::Io(e))?;
+    if let Some(dir) = sig_dir {
+        crate::core::signature_handler::restore_signatures(&temp_output, dir, output)?;
+        let _ = std::fs::remove_file(&temp_output);
+    } else {
+        std::fs::rename(&temp_output, output).map_err(|e| crate::error::Error::Io(e))?;
+    }
 
     eprintln!(
-        "put-resource-all: put {put_count} entr{} into {output} (unsigned, no signatures)",
+        "put-resource-all: put {put_count} entr{} into {output}",
         if put_count == 1 { "y" } else { "ies" }
     );
 

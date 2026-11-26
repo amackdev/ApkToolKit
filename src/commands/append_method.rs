@@ -9,9 +9,10 @@ pub fn run(
     class: &str,
     method_decl: &str,
     smali_body: &str,
+    sig_dir: Option<&str>,
     no_sign: bool,
 ) -> Result<()> {
-    let sig_dir = if no_sign { None } else { None };
+    let sig_dir = if no_sign { None } else { sig_dir };
 
     let result = patch_flow::append_method(input, output, class, method_decl, smali_body, sig_dir)?;
 

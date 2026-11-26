@@ -9,9 +9,10 @@ pub fn run(
     class: &str,
     method: &str,
     pattern: &str,
+    sig_dir: Option<&str>,
     no_sign: bool,
 ) -> Result<()> {
-    let sig_dir = if no_sign { None } else { None };
+    let sig_dir = if no_sign { None } else { sig_dir };
 
     let result = patch_flow::remove_lines(input, output, class, method, pattern, sig_dir)?;
 
