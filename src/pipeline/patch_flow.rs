@@ -871,37 +871,65 @@ pub fn add_smali(
     let mut apk = apkscope_core::apk::Apk::new(file)
         .map_err(|e| crate::error::Error::Other(format!("Failed to open APK: {e}")))?;
 
-    // Determine the next classesN.dex number
+    // Prefer reusing an existing DEX that has free capacity, to avoid creating
+    // a new classesN.dex for every added class.
     let dex_entries = apk.dex().map_err(|e| {
         crate::error::Error::Other(format!("Failed to read DEX: {e}"))
     })?;
-    let mut max_dex = 0;
-    for (name, _) in &dex_entries {
-        let num: u32 = name
-            .trim_start_matches("classes")
-            .trim_end_matches(".dex")
-            .parse()
-            .unwrap_or(1);
-        if num > max_dex {
-            max_dex = num;
+
+    let mut reused = false;
+    for (idx, (_name, bytes)) in dex_entries.iter().enumerate() {
+        if let Ok(dex) = apkscope_core::dex::Dex::parse(bytes) {
+            let counts = dex.counts();
+            // Conservative thresholds: leave headroom for the new class's tables.
+            if dex.class_count < 64000
+                && counts[3] < 64000
+                && counts[0] < 64000
+                && counts[1] < 64000
+            {
+                let classes = apk.classes().map_err(|e| {
+                    crate::error::Error::Other(format!("Failed to access APK classes: {e}"))
+                })?;
+                classes.set_text_in(idx, &smali_text).map_err(|e| {
+                    crate::error::Error::Other(format!("Failed to add smali to DEX {idx}: {e}"))
+                })?;
+                reused = true;
+                break;
+            }
         }
     }
-    let next_dex = format!("classes{}.dex", max_dex + 1);
 
-    // Determine DEX version from existing DEX
-    let dex_version = dex_entries
-        .first()
-        .and_then(|(_, bytes)| bytes.get(4..7))
-        .map(|v| [v[0], v[1], v[2]])
-        .unwrap_or(*b"035");
+    if !reused {
+        // Fall back to creating a new classesN.dex entry.
+        let mut max_dex = 0;
+        for (name, _) in &dex_entries {
+            let num: u32 = name
+                .trim_start_matches("classes")
+                .trim_end_matches(".dex")
+                .parse()
+                .unwrap_or(1);
+            if num > max_dex {
+                max_dex = num;
+            }
+        }
+        let next_dex = format!("classes{}.dex", max_dex + 1);
 
-    // Assemble smali into DEX bytes
-    let dex_bytes = apkscope_core::smali::assemble(&[&smali_text], dex_version)
-        .map_err(|e| crate::error::Error::Other(format!("Smali assemble error: {e}")))?;
+        // Determine DEX version from existing DEX
+        let dex_version = dex_entries
+            .first()
+            .and_then(|(_, bytes)| bytes.get(4..7))
+            .map(|v| [v[0], v[1], v[2]])
+            .unwrap_or(*b"035");
 
-    // Put the new DEX as an entry
-    apk.put_entry(&next_dex, dex_bytes)
-        .map_err(|e| crate::error::Error::Other(format!("Failed to put entry {next_dex}: {e}")))?;
+        // Assemble smali into DEX bytes
+        let dex_bytes = apkscope_core::smali::assemble(&[&smali_text], dex_version)
+            .map_err(|e| crate::error::Error::Other(format!("Smali assemble error: {e}")))?;
+
+        // Put the new DEX as an entry
+        apk.put_entry(&next_dex, dex_bytes).map_err(|e| {
+            crate::error::Error::Other(format!("Failed to put entry {next_dex}: {e}"))
+        })?;
+    }
 
     let _edits = apk.edits().map_err(|e| {
         crate::error::Error::Other(format!("Failed to write APK edits: {e}"))
